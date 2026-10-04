@@ -7,7 +7,7 @@
 // @match        https://bgm.tv/*
 // @match        https://bangumi.tv/*
 // @match        https://chii.in/*
-// @run-at       document-body
+// @run-at       document-start
 // @grant        none
 // @license      MIT
 // @downloadURL  https://raw.githubusercontent.com/imagebuilder1837/replace-ukagaka-with-nailong/refs/heads/main/src/index.user.js
