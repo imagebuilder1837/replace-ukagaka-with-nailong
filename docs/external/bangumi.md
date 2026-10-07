@@ -1,4 +1,4 @@
-# Bangumi 伪春菜宿主契约
+# Bangumi 原站外观宿主契约
 
 > 证据：2026-10-03 用户保存的首页运行后 DOM（`/tmp/Bangumi 番组计划.html`）及同名 `_files` 资源，以及匿名抓取的原站 JS。保存页不是原始 SSR；源码分析不证明视觉呈现或实际 GPU 开销。实时页面与本文冲突时，以实时页面为准并更新本文。
 
@@ -35,6 +35,16 @@
 - **这不是完整的应用销毁接口**：没有调用 PIXI app.stop/app.destroy，不取消在途加载；模型未 ready 时可跳过清理。外部先删 canvas 再调用它，还可能在 `.remove()` 处因空引用抛错。销毁也不负责恢复静态 body 的淡出状态。
 - 模型 destroy 会停止其自身 autoUpdate 并释放内部模型，但应用渲染 ticker 是独立的。`loadOhMyLive2D()` 返回空对象，没有暴露 app 引用或完整 dispose API；不应将通用上游 OML 文档当成此定制 bundle 的可用接口。
 - CSS 隐藏、移除 DOM 均不构成完整资源释放的证据。尚未做浏览器性能测量，不宣称销毁后仍绘制已销毁模型，也不保证所有 RAF/WebGL 开销已归零。
+
+## 页头站娘（`#headerNeue2`）
+
+> 以下取自用户提供的同名保存首页及 `_files/bangumi.min.css`，未做实时浏览器验证；不据此推定其他路由或三个域名结构一致。
+
+- 样本结构：`#headerNeue2 > .headerNeueInner > div.bg.musume_6`，为空装饰节点；首页链接 `a.logo` 是其兄弟，不应随装饰一起替换。样本只出现 6 号；每次随机返回 0–6 是用户提供的原站行为，未通过多次请求核实。
+- `#headerNeue2 div.bg` 声明宽高 **40×50 CSS px**，背景 `/img/rc3/bg_musume_2x.png`，`background-size:280px 75px`、默认位置 `0 -10px`。页头 `musume_1` 至 `musume_6` 将位置改为 `-40px 0` 至 `-240px 0`（步长 40px）；没有单独的页头 `musume_0` 规则。**只换图片 URL 会继承精灵图缩放和差分偏移，不能直接用于单张正面图。**
+- inner 为 flex、纵向居中；装饰未显式禁止 flex 收缩，40×50 是声明尺寸而非所有窄屏的实测值。640px 以下调整 inner padding 等布局，未发现隐藏该装饰的规则；高 DPI 规则仍使用同一背景和 280×75 缩放，未发现暗色专属差分图。
+- 保存 CSS/JS 未检出针对该装饰的事件处理；不等于排除了通用委托或其他线上脚本。保留原节点与兄弟 logo/导航可避免无意改变结构，但交互仍需实际验证。
+- CSS 另有 `#headerNeue`、旧 `#top/#logo` 和 `#rakuenHeader` 样式，不能将上述选择器直接推广到这些页头；样本未证明它们当前在哪些路由使用。
 
 ## 一手证据
 

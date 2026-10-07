@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         把伪春菜换成奶龙
 // @namespace    https://github.com/imagebuilder1837/replace-ukagaka-with-nailong
-// @version      0.1.0
-// @description  把 Bangumi 右下角的 Live2D 伪春菜换成大笑奶龙。
+// @version      0.1.1
+// @description  把 Bangumi 右下角的 Live2D 伪春菜和左上角的站娘换成奶龙。
 // @author       imagebuilder1837
 // @match        https://bgm.tv/*
 // @match        https://bangumi.tv/*
@@ -18,6 +18,9 @@
   "use strict";
 
   const IMAGE_URL = "https://lsky.ry.mk/i/2026/10/03/8a0ced722f2a1.webp";
+  const HEADER_IMAGE_URL = "https://lsky.ry.mk/i/2026/10/07/97f25f2f55869.webp";
+  const HEADER_SELECTOR =
+    "#headerNeue2 div.bg:is(.musume_0, .musume_1, .musume_2, .musume_3, .musume_4, .musume_5, .musume_6)";
   const STATE_ATTRIBUTE = "data-nailong-state";
   const FALLBACK_ATTRIBUTE = "data-nailong-static-fallback";
   const style = document.createElement("style");
@@ -68,8 +71,30 @@
   let wasVisible = false;
   let hostApi = null;
   let hook = null;
+  let headerImageRequested = false;
   let lastDisposedModel = null;
   const resizeObserver = new ResizeObserver(refresh);
+
+  function loadHeaderImage() {
+    if (headerImageRequested || !document.querySelector(HEADER_SELECTOR))
+      return;
+    // 每页只尝试一次；成功前不覆盖原背景，也不与伪春菜的加载状态耦合。
+    headerImageRequested = true;
+    const next = new Image();
+    next.addEventListener(
+      "load",
+      () => {
+        // 保留原占位，以背景绘制窗口裁掉 40×75 图像底部的 25px。
+        style.textContent += `
+          ${HEADER_SELECTOR} {
+              background: url("${HEADER_IMAGE_URL}") left top / 40px 75px no-repeat !important;
+          }
+        `;
+      },
+      { once: true },
+    );
+    next.src = HEADER_IMAGE_URL;
+  }
 
   function findFrame() {
     const shell = robot?.querySelector("#ukagaka_shell");
@@ -196,6 +221,7 @@
   }
 
   function refresh() {
+    loadHeaderImage();
     const nextRobot = document.getElementById("robot");
     if (nextRobot !== robot) {
       robot?.removeAttribute(STATE_ATTRIBUTE);
@@ -256,6 +282,7 @@
 
   // 发现解析中的角色、异步挂载和新全局 API；忽略自有图片样式，避免观察回环。
   const observer = new MutationObserver((records) => {
+    loadHeaderImage();
     if (
       document.getElementById("robot") !== robot ||
       (window.chiiLib?.ukagaka || null) !== hostApi
