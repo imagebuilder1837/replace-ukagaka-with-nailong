@@ -87,7 +87,7 @@
         // 保留原占位，以背景绘制窗口裁掉 40×75 图像底部的 25px。
         style.textContent += `
           ${HEADER_SELECTOR} {
-              background: url("${HEADER_IMAGE_URL}") left top / 40px 75px no-repeat !important;
+              background: url("${HEADER_IMAGE_URL}") center top / 40px 75px no-repeat !important;
           }
         `;
       },
