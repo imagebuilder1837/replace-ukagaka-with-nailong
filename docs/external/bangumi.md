@@ -1,6 +1,6 @@
 # Bangumi 原站外观宿主契约
 
-> 证据：2026-10-03 用户保存的首页运行后 DOM（`/tmp/Bangumi 番组计划.html`）及同名 `_files` 资源，以及匿名抓取的原站 JS。保存页不是原始 SSR；源码分析不证明视觉呈现或实际 GPU 开销。实时页面与本文冲突时，以实时页面为准并更新本文。
+> 证据：2026-10-03 用户保存的首页运行后 DOM（`/tmp/Bangumi 番组计划.html`）及同名 `_files` 资源、匿名抓取的原站 JS，以及 2026-10-11 保存的超展开页面（见下文）。保存页不是原始 SSR；源码分析不证明视觉呈现或实际 GPU 开销。实时页面与本文冲突时，以实时页面为准并更新本文。
 
 ## 来源与挂载边界
 
@@ -46,9 +46,22 @@
 - 保存 CSS/JS 未检出针对该装饰的事件处理；不等于排除了通用委托或其他线上脚本。保留原节点与兄弟 logo/导航可避免无意改变结构，但交互仍需实际验证。
 - CSS 另有 `#headerNeue`、旧 `#top/#logo` 和 `#rakuenHeader` 样式，不能将上述选择器直接推广到这些页头；样本未证明它们当前在哪些路由使用。
 
+## 超展开的加载边界
+
+> 证据：`/tmp/Bangumi超展开.html` 及 `/tmp/Bangumi超展开_files/`；这是运行后保存页，未做实时浏览器验证。
+
+- 顶层来源为 `https://bgm.tv/rakuen`。`#listFrame` 保存为 `topiclist.html`；`#right` 保存为 `home.html`，但其原路由为 `/rakuen/topic/group/472376`，不是首页。右框会更新顶层标题，不能据标题判断顶层路由。
+- 伪春菜在顶层（HTML 176–189 行），结构仍为 `#robot > #ukagaka_shell > .ui_12`，含原气泡、静态 body 及 shell 下的 Live2D stage；两个 iframe 均没有这些宿主节点。
+- 顶层页头为 `#rakuenHeader`；三个文档都没有 `#headerNeue2` 站娘装饰。共享 CSS 包含首页选择器，不代表该节点存在。
+- 顶层没有 `chiiLib.widget.loader()` 调用。两个 iframe 的加载清单都包含本组件 `app_id=7231`（`topiclist.html:567`、`home.html:1128`），且均保存了 `data-nailong-*` 样式；顶层没有这些样式。组件确实执行在子文档，而外观宿主在顶层，仅查执行文档会失效。
+- 保存的 `g=js` 加载器在当前窗口 `eval` 组件源码；通用 document ready 仍调用当前文档的伪春菜初始化。`rakuen_frame.init()` 的通知跨框访问不等于将角色挂进 iframe。
+- 核心角色几何及显隐规则与已记录首页契约相容。超展开整体另有 `min-width:960px` 和双栏 iframe 布局，不能据角色的 640px 规则推定整个路由同样适配窄屏。
+- 此次保存的基础 CSS 另有 `#oml-stage { bottom:5px!important }`，会覆盖注入样式的 `bottom:0`。缺少旧首页资源的逐字比较，不能判定为超展开专有差异；不应把注入的偏移当作最终布局。
+
 ## 一手证据
 
 1. 保存首页：OML 注入样式与 `#robot/#ukagaka_shell` 运行后结构；本次只证明该首页样本，不证明三域名、所有页面或其他扩展的行为一致。
 2. [`/min/g=js?r771`](https://bgm.tv/min/g=js?r771)：匿名抓取与保存的 `_files/g=js` 逐字一致；锚点为 `chiiLib.ukagaka` 的 init/isDisplay/toggleDisplay/presentSpeech/initLive2D/reloadLive2D/disposeLive2D 及 document ready 调用。
 3. [`/css/dist/bangumi.min.css?r771`](https://bgm.tv/css/dist/bangumi.min.css?r771)：几何结论取自保存的 `_files/bangumi.min.css` 对应选择器和 640px media 规则；未将脱离 media 层级的摘录视为最终 computed style。
 4. [`/js/oml-cubism4.min.js?v3`](https://bgm.tv/js/oml-cubism4.min.js?v3)：本次公开抓取；锚点为 `VE.mountElement/listenModelEvent/omlStatus`、`jE` 加载器、Live2DModel.destroy 和 PIXI Application/ticker。保存资源中无该 bundle 副本，不能保证它与快照执行时逐字相同。
+5. 保存超展开页及两个 iframe：外观宿主、组件加载清单与已注入样式的文档边界；同目录 `g=js` 的 `widget.loader/loadPlugin` 为执行窗口的源码证据。
