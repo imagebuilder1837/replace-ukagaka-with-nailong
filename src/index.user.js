@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         把伪春菜换成奶龙
 // @namespace    https://github.com/imagebuilder1837/replace-ukagaka-with-nailong
-// @version      0.1.2
-// @description  把 Bangumi 右下角的 Live2D 伪春菜和左上角的站娘换成奶龙。
+// @version      0.1.3
+// @description  把 Bangumi Live2D 伪春菜、页头站娘和默认用户头像换成奶龙。
 // @author       imagebuilder1837
 // @match        https://bgm.tv/*
 // @match        https://bangumi.tv/*
@@ -133,6 +133,233 @@
       }
 
       return { refresh: () => target.run(refresh) };
+    }
+
+    function createAvatarTarget(win) {
+      const doc = win.document;
+      const attribute = "data-nailong-avatar";
+      const selector = `img, [style*="background"], [class*="avatar"], [class*="Avatar"], [${attribute}]`;
+      const stylesheetSelector = "style, link[rel~='stylesheet']";
+      const marked = new Set();
+      const placeholders = new Map();
+      let styleDirty = true;
+      let requested = false;
+      let ready = false;
+      let image = null;
+      let style = null;
+      const target = isolate(win, "默认头像", () => {
+        const previous = image;
+        image = null;
+        ready = false;
+        const errors = rollbackSteps(
+          () => previous?.remove(),
+          () => style?.remove(),
+        );
+        for (const node of marked)
+          errors.push(...rollbackSteps(() => node.removeAttribute(attribute)));
+        marked.clear();
+        return errors;
+      });
+
+      function isDefaultURL(value) {
+        if (!value) return false;
+        try {
+          const url = new win.URL(value, doc.baseURI);
+          return (
+            ["https:", "http:"].includes(url.protocol) &&
+            url.host === "lain.bgm.tv" &&
+            /^\/pic\/user\/[sml]\/icon\.jpg$/.test(url.pathname)
+          );
+        } catch {
+          return false;
+        }
+      }
+
+      function isDefaultAvatar(node) {
+        if (node.localName === "img") {
+          // srcset / picture 以浏览器实际选择的资源为准；不改写宿主的加载属性。
+          const responsive =
+            node.hasAttribute("srcset") ||
+            node.parentElement?.localName === "picture";
+          return isDefaultURL(
+            responsive ? node.currentSrc : node.getAttribute("src"),
+          );
+        }
+        const background = win.getComputedStyle(node).backgroundImage;
+        const match = /^url\((?:"([^"]*)"|'([^']*)'|([^'"]*))\)$/.exec(
+          background,
+        );
+        return Boolean(match && isDefaultURL(match[1] ?? match[2] ?? match[3]));
+      }
+
+      function ensureStyle() {
+        style ||= doc.createElement("style");
+        if (styleDirty) {
+          // 160px 宽原图以 200% 显示，对应顶部中央的 80×80 头部窗口。
+          style.textContent = `
+          [${attribute}] {
+              background-image: url("${HEADER_IMAGE_URL}") !important;
+              background-size: 200% auto !important;
+              background-position: center top !important;
+              background-repeat: no-repeat !important;
+              background-origin: content-box !important;
+              background-clip: content-box !important;
+          }
+          ${Array.from(placeholders.values()).join("\n")}
+    `;
+          styleDirty = false;
+        }
+        if (!style.isConnected) (doc.head || doc.documentElement).append(style);
+      }
+
+      function avatarValue(node) {
+        if (node.localName !== "img") return "background";
+        const width = node.naturalWidth || node.width || node.height;
+        const height = node.naturalHeight || node.height || node.width;
+        // 无固有尺寸、也无占位的图片先等原图加载，不能把布局缩成 1px。
+        if (!width || !height) return null;
+        const value = `${width}x${height}`;
+        if (!placeholders.has(value)) {
+          // 同尺寸空白占位隐藏原 img 内容；src、srcset 和固有比例保持不变。
+          placeholders.set(
+            value,
+            `
+          img[${attribute}="${value}"] {
+              content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'/%3E") !important;
+          }`,
+          );
+          styleDirty = true;
+        }
+        return value;
+      }
+
+      function requestImage() {
+        requested = true;
+        const next = new win.Image();
+        image = next;
+        next.addEventListener(
+          "load",
+          () =>
+            target.run(() => {
+              if (image !== next) return;
+              image = null;
+              ready = true;
+              refreshRoots([doc]);
+            }),
+          { once: true },
+        );
+        next.addEventListener(
+          "error",
+          () =>
+            target.run(() => {
+              if (image === next) image = null;
+            }),
+          { once: true },
+        );
+        // 与页头共用图片地址，但不依赖页头 DOM 或页头目标的加载状态。
+        next.src = HEADER_IMAGE_URL;
+      }
+
+      function refreshRoots(roots) {
+        if (requested && !ready) return;
+        const candidates = new Set();
+        for (const root of roots) {
+          if (!root || !doc.contains(root)) continue;
+          if (root.nodeType === 1 && root.matches(selector))
+            candidates.add(root);
+          for (const node of root.querySelectorAll(selector))
+            candidates.add(node);
+        }
+        for (const node of marked) {
+          if (!doc.contains(node)) {
+            node.removeAttribute(attribute);
+            marked.delete(node);
+          }
+        }
+        if (!candidates.size) return;
+        if (ready) ensureStyle();
+        const sheet = Array.from(candidates).some(
+          (node) => node.localName !== "img",
+        )
+          ? style?.sheet
+          : null;
+        const updates = [];
+        // 同步读取宿主原背景；CSSOM 开关不会制造属性观察回环，也不会保存过期背景。
+        if (sheet) sheet.disabled = true;
+        try {
+          for (const node of candidates) {
+            if (isDefaultAvatar(node)) {
+              if (!ready) {
+                requestImage();
+                return;
+              }
+              updates.push([node, avatarValue(node)]);
+            } else if (marked.has(node)) {
+              updates.push([node, null]);
+            }
+          }
+        } finally {
+          if (sheet) sheet.disabled = false;
+        }
+        // 完成原样式读取后再统一写入，避免更新占位规则时读到自己的奶龙背景。
+        if (ready) ensureStyle();
+        for (const [node, value] of updates) {
+          if (value === null) {
+            node.removeAttribute(attribute);
+            marked.delete(node);
+          } else {
+            marked.add(node);
+            if (node.getAttribute(attribute) !== value)
+              node.setAttribute(attribute, value);
+          }
+        }
+      }
+
+      function containsStylesheet(node) {
+        return (
+          node.nodeType === 1 &&
+          (node.matches(stylesheetSelector) ||
+            node.querySelector(stylesheetSelector))
+        );
+      }
+
+      return {
+        refresh(records) {
+          target.run(() => {
+            if (!records) {
+              refreshRoots([doc]);
+              return;
+            }
+            const roots = new Set();
+            for (const record of records) {
+              const node = record.target;
+              if (node === style) continue;
+              if (record.type === "attributes") {
+                roots.add(
+                  node.localName === "source"
+                    ? node.parentElement
+                    : node.localName === "link"
+                      ? doc
+                      : node,
+                );
+              } else {
+                if (node.localName === "style") roots.add(doc);
+                if (node.localName === "picture") roots.add(node);
+                for (const added of record.addedNodes) {
+                  if (added.nodeType !== 1 || added === style) continue;
+                  roots.add(containsStylesheet(added) ? doc : added);
+                }
+                if (Array.from(record.removedNodes).some(containsStylesheet))
+                  roots.add(doc);
+              }
+            }
+            refreshRoots(roots);
+          });
+        },
+        imageLoaded(node) {
+          target.run(() => refreshRoots([node]));
+        },
+      };
     }
 
     function createRobotTarget(win) {
@@ -498,9 +725,11 @@
 
     const header = createHeaderTarget(win);
     const robot = createRobotTarget(win);
+    const avatars = createAvatarTarget(win);
     const refresh = () => {
       header.refresh();
       robot.refresh();
+      avatars.refresh();
     };
     // 按宿主文档登记，多个 iframe／安装入口复用；不跟随来源 iframe 的卸载清理。
     win[key] = { document: doc, refresh };
@@ -510,12 +739,23 @@
       observer = new win.MutationObserver((records) => {
         header.refresh();
         robot.refresh(records);
+        avatars.refresh(records);
       });
       observer.observe(doc, {
         subtree: true,
         childList: true,
         attributes: true,
-        attributeFilter: ["style", "class", "hidden", "data-theme"],
+        attributeFilter: [
+          "style",
+          "class",
+          "hidden",
+          "data-theme",
+          "src",
+          "srcset",
+          "sizes",
+          "media",
+          "type",
+        ],
       });
     } catch (error) {
       rollbackSteps(
@@ -531,6 +771,17 @@
       "load",
       (event) => {
         if (event.target instanceof win.HTMLScriptElement) refresh();
+        else if (event.target instanceof win.HTMLImageElement)
+          avatars.imageLoaded(event.target);
+        else if (event.target instanceof win.HTMLLinkElement) avatars.refresh();
+      },
+      true,
+    );
+    doc.addEventListener(
+      "error",
+      (event) => {
+        if (event.target instanceof win.HTMLImageElement)
+          avatars.imageLoaded(event.target);
       },
       true,
     );
