@@ -1,6 +1,6 @@
 # 奶龙外观替换：已确认边界
 
-本文记录设计访谈中确认的实现边界。领域术语见 [`CONTEXT.md`](../CONTEXT.md)，宿主事实与证据见 [`外部契约`](external/bangumi.md)。
+本文记录设计访谈中确认的实现边界。领域术语见 [`GLOSSARY.md`](../GLOSSARY.md)，宿主事实与证据见 [`外部契约`](external/bangumi.md)。
 
 ## 范围与交互
 
