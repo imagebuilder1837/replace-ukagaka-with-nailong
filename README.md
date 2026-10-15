@@ -8,6 +8,8 @@
 
 ![example2](res/example2.webp)
 
+![example3](res/example3.webp)
+
 ## 安装
 
 1. 可以通过[这个链接](https://bgm.tv/dev/app/7231)在 Bangumi 组件页面启用。
